@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
-const { getStatuses, updateStatus } = require('./db');
+const { getStatuses, updateStatus, getPagamentos, updatePagamento, VALID_STATUSES } = require('./db');
 const { startWatcher } = require('./watcher');
 const { generateOS } = require('./generateOS');
 const { getNgrokUrl } = require('./ngrok');
@@ -64,8 +64,9 @@ function readStructure() {
     return [];
   }
 
-  const statuses = getStatuses();
-  const result = [];
+  const statuses   = getStatuses();
+  const pagamentos = getPagamentos();
+  const result     = [];
 
   const isDir = (p) => fs.statSync(p).isDirectory();
   const isFile = (p) => fs.statSync(p).isFile();
@@ -109,13 +110,14 @@ function readStructure() {
         console.warn(`[leitura] Não foi possível ler ${clientePath}:`, e.message);
       }
 
-      // Cada arquivo tem seu próprio status
       const arquivosComStatus = arquivos.map((arquivo) => ({
         nome: arquivo,
         status: statuses[`${dateDir}/${clienteDir}/${arquivo}`] || 'PENDENTE'
       }));
 
-      return { nome: clienteDir, arquivos: arquivosComStatus };
+      const pago = pagamentos[`${dateDir}/${clienteDir}`] ?? false;
+
+      return { nome: clienteDir, pago, arquivos: arquivosComStatus };
     });
 
     result.push({ data: dateDir, clientes });
@@ -156,12 +158,24 @@ app.post('/api/status', (req, res) => {
     return res.status(400).json({ error: 'Campos data, cliente, arquivo e status são obrigatórios' });
   }
 
-  const validStatuses = ['PENDENTE', 'PRODUCAO', 'ENTREGUE'];
-  if (!validStatuses.includes(status)) {
-    return res.status(400).json({ error: `Status inválido. Use: ${validStatuses.join(', ')}` });
+  if (!VALID_STATUSES.includes(status)) {
+    return res.status(400).json({ error: `Status inválido. Use: ${VALID_STATUSES.join(', ')}` });
   }
 
   updateStatus(data, cliente, arquivo, status);
+  broadcastUpdate();
+  res.json({ success: true });
+});
+
+// POST /api/pagamento — marca cliente como pago ou não
+app.post('/api/pagamento', (req, res) => {
+  const { data, cliente, pago } = req.body;
+
+  if (!data || !cliente || pago === undefined) {
+    return res.status(400).json({ error: 'Campos data, cliente e pago são obrigatórios' });
+  }
+
+  updatePagamento(data, cliente, pago);
   broadcastUpdate();
   res.json({ success: true });
 });
