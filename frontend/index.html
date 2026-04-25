@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gestão de OS — Impressão</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    body { font-family: 'Inter', system-ui, sans-serif; }
+
+    /* ── Cards ─────────────────────────────────────────── */
+    .card-enter { animation: cardEnter 0.22s ease-out both; }
+    @keyframes cardEnter {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Modal ─────────────────────────────────────────── */
+    #modal-backdrop {
+      display: none;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+    #modal-backdrop.open {
+      display: flex;
+      opacity: 1;
+    }
+    #modal-panel {
+      transform: scale(0.95) translateY(8px);
+      transition: transform 0.22s cubic-bezier(0.16,1,0.3,1), opacity 0.2s ease;
+      opacity: 0;
+    }
+    #modal-backdrop.open #modal-panel {
+      transform: scale(1) translateY(0);
+      opacity: 1;
+    }
+
+    /* ── Toast ─────────────────────────────────────────── */
+    .toast { animation: toastIn 0.3s cubic-bezier(0.16,1,0.3,1) both; }
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateX(110%); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    .toast-exit { animation: toastOut 0.22s ease-in forwards; }
+    @keyframes toastOut {
+      to { opacity: 0; transform: translateX(110%); }
+    }
+
+    /* ── Misc ──────────────────────────────────────────── */
+    .fade-in { animation: fadeIn 0.2s ease both; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
+
+    .btn-status:disabled { cursor: default; }
+  </style>
+</head>
+<body class="bg-[#0d0d12] text-gray-100 min-h-screen antialiased">
+
+  <!-- ══ TOASTS ════════════════════════════════════════════════════════ -->
+  <div id="toasts" class="fixed top-4 right-4 z-[60] flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- ══ MODAL ═════════════════════════════════════════════════════════ -->
+  <div id="modal-backdrop"
+    class="fixed inset-0 z-50 items-center justify-center p-4"
+    style="background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);"
+    onclick="closeModal(event)">
+
+    <div id="modal-panel"
+      class="bg-[#17171f] border border-gray-700/60 rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[85vh]"
+      onclick="event.stopPropagation()">
+
+      <!-- Cabeçalho do modal -->
+      <div class="flex items-center justify-between gap-3 px-5 py-4 border-b border-gray-700/50 flex-shrink-0">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="w-9 h-9 rounded-xl bg-gray-700/60 flex items-center justify-center text-lg flex-shrink-0">📁</div>
+          <div class="min-w-0">
+            <h2 id="modal-title" class="font-bold text-white text-base truncate"></h2>
+            <p id="modal-subtitle" class="text-[11px] text-gray-500 mt-0.5"></p>
+          </div>
+        </div>
+        <button onclick="closeModal()"
+          class="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500 hover:text-white hover:bg-gray-700/60 transition-colors flex-shrink-0">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Mini contadores dentro do modal -->
+      <div id="modal-counts" class="flex gap-2 px-5 py-3 border-b border-gray-700/50 flex-shrink-0"></div>
+
+      <!-- Lista de arquivos (scrollável) -->
+      <div id="modal-files" class="overflow-y-auto flex-1 divide-y divide-gray-700/40 px-1"></div>
+
+      <!-- Rodapé -->
+      <div class="px-5 py-3 border-t border-gray-700/50 flex-shrink-0 flex items-center justify-between">
+        <span id="modal-total" class="text-[11px] text-gray-600"></span>
+        <button onclick="closeModal()"
+          class="text-xs font-semibold text-gray-500 hover:text-white transition-colors">
+          Fechar
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══ HEADER ════════════════════════════════════════════════════════ -->
+  <header class="bg-[#111118] border-b border-gray-800/80 sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between gap-4 flex-wrap">
+
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-lg shadow-blue-900/40">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-base font-bold text-white leading-tight">Gestão de OS</h1>
+          <p class="text-[11px] text-gray-500 leading-tight tracking-wide">Impressão &amp; Gráfica</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
+        <div class="flex items-center gap-2 bg-gray-800/60 border border-gray-700/40 rounded-lg px-3 py-1.5">
+          <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+          <span class="text-[11px] text-gray-400 font-medium">Pendente</span>
+          <span id="count-pendente" class="text-sm font-bold text-amber-400 min-w-[16px] text-right">0</span>
+        </div>
+        <div class="flex items-center gap-2 bg-gray-800/60 border border-gray-700/40 rounded-lg px-3 py-1.5">
+          <span class="w-2 h-2 rounded-full bg-blue-400"></span>
+          <span class="text-[11px] text-gray-400 font-medium">Produção</span>
+          <span id="count-producao" class="text-sm font-bold text-blue-400 min-w-[16px] text-right">0</span>
+        </div>
+        <div class="flex items-center gap-2 bg-gray-800/60 border border-gray-700/40 rounded-lg px-3 py-1.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+          <span class="text-[11px] text-gray-400 font-medium">Entregue</span>
+          <span id="count-entregue" class="text-sm font-bold text-emerald-400 min-w-[16px] text-right">0</span>
+        </div>
+        <div id="conn-dot" title="Desconectado"
+          class="w-2.5 h-2.5 rounded-full bg-gray-600 transition-all duration-500 cursor-default ml-1"></div>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- ══ FILTROS ════════════════════════════════════════════════════════ -->
+  <div class="bg-[#111118]/80 border-b border-gray-800/60 sticky top-[73px] z-30 backdrop-blur-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap gap-3 items-center">
+
+      <div class="relative flex-1 min-w-[180px] max-w-xs">
+        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 pointer-events-none"
+          fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+        </svg>
+        <input id="search" type="text" placeholder="Buscar cliente..."
+          class="w-full bg-gray-800/70 border border-gray-700/50 rounded-lg pl-8 pr-3 py-2 text-sm text-gray-100 placeholder-gray-600
+                 focus:outline-none focus:border-blue-500/70 focus:ring-1 focus:ring-blue-500/30 transition-all"
+          oninput="onSearch(this.value)" />
+      </div>
+
+      <div class="flex gap-1.5">
+        <button id="fbtn-ALL"      onclick="setFilter('ALL')"      class="fbtn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all">Todos</button>
+        <button id="fbtn-PENDENTE" onclick="setFilter('PENDENTE')" class="fbtn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all text-amber-400  hover:bg-amber-400/10">Pendente</button>
+        <button id="fbtn-PRODUCAO" onclick="setFilter('PRODUCAO')" class="fbtn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all text-blue-400   hover:bg-blue-400/10">Produção</button>
+        <button id="fbtn-ENTREGUE" onclick="setFilter('ENTREGUE')" class="fbtn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all text-emerald-400 hover:bg-emerald-400/10">Entregue</button>
+      </div>
+
+      <span id="last-updated" class="text-[11px] text-gray-600 ml-auto hidden sm:block"></span>
+    </div>
+  </div>
+
+  <!-- ══ CONTEÚDO ═══════════════════════════════════════════════════════ -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+
+    <div id="state-loading" class="flex flex-col items-center justify-center py-24 gap-4">
+      <div class="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      <p class="text-gray-500 text-sm">Carregando ordens de serviço...</p>
+    </div>
+
+    <div id="state-empty" class="hidden flex-col items-center justify-center py-24 gap-4 text-center">
+      <div class="w-16 h-16 bg-gray-800/60 border border-gray-700/40 rounded-2xl flex items-center justify-center">
+        <svg class="w-7 h-7 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+            d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+        </svg>
+      </div>
+      <div>
+        <p class="text-gray-400 font-medium">Nenhuma OS encontrada</p>
+        <p class="text-gray-600 text-sm mt-1">Adicione pastas em <code class="text-gray-500 bg-gray-800 px-1.5 py-0.5 rounded text-xs">./impressao</code></p>
+      </div>
+    </div>
+
+    <div id="content" class="hidden"></div>
+
+  </main>
+
+  <script>
+  // ═══════════════════════════════════════════════════════════════════
+  //  Estado
+  // ═══════════════════════════════════════════════════════════════════
+  let allData = [];
+  let currentFilter = 'ALL';
+  let searchQuery   = '';
+
+  // Estado do modal aberto
+  let modalState = null; // { data, clienteNome }
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  Config de status
+  // ═══════════════════════════════════════════════════════════════════
+  const STATUS = {
+    PENDENTE: {
+      label:  'Pendente',
+      badge:  'bg-amber-400/10 text-amber-300 border border-amber-400/25',
+      dot:    'bg-amber-400',
+      active: 'bg-amber-400/20 text-amber-300 border-amber-400/50',
+      hover:  'text-gray-500 border-gray-700/50 hover:bg-amber-400/10 hover:text-amber-300 hover:border-amber-400/30'
+    },
+    PRODUCAO: {
+      label:  'Produção',
+      badge:  'bg-blue-400/10 text-blue-300 border border-blue-400/25',
+      dot:    'bg-blue-400',
+      active: 'bg-blue-400/20 text-blue-300 border-blue-400/50',
+      hover:  'text-gray-500 border-gray-700/50 hover:bg-blue-400/10 hover:text-blue-300 hover:border-blue-400/30'
+    },
+    ENTREGUE: {
+      label:  'Entregue',
+      badge:  'bg-emerald-400/10 text-emerald-300 border border-emerald-400/25',
+      dot:    'bg-emerald-400',
+      active: 'bg-emerald-400/20 text-emerald-300 border-emerald-400/50',
+      hover:  'text-gray-500 border-gray-700/50 hover:bg-emerald-400/10 hover:text-emerald-300 hover:border-emerald-400/30'
+    }
+  };
+
+  const FILE_ICONS = {
+    pdf:'📄', jpg:'🖼️', jpeg:'🖼️', png:'🖼️', gif:'🖼️',
+    ai:'🎨', psd:'🎨', cdr:'🎨', svg:'🎨',
+    mp4:'🎬', mov:'🎬', zip:'📦', rar:'📦'
+  };
+  const fileIcon = (name) => FILE_ICONS[name.split('.').pop()?.toLowerCase()] ?? '📎';
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  Fetch
+  // ═══════════════════════════════════════════════════════════════════
+  async function fetchData(silent = false) {
+    try {
+      const res = await fetch('/api/os');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      allData = await res.json();
+      render();
+      updateStats();
+      // Atualiza modal se estiver aberto
+      if (modalState) refreshModal();
+      if (!silent) {
+        const el = document.getElementById('last-updated');
+        el.textContent = 'Atualizado ' + new Date().toLocaleTimeString('pt-BR');
+        el.classList.remove('hidden');
+      }
+    } catch (err) {
+      console.error('[fetch]', err);
+      if (!silent) showToast('Erro ao carregar dados', 'error');
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  Render (grid de cards)
+  // ═══════════════════════════════════════════════════════════════════
+  function render() {
+    const $loading = document.getElementById('state-loading');
+    const $empty   = document.getElementById('state-empty');
+    const $content = document.getElementById('content');
+
+    $loading.classList.add('hidden');
+
+    const filtered = allData.map(g => ({
+      ...g,
+      clientes: g.clientes
+        .filter(c => c.nome.toLowerCase().includes(searchQuery))
+        .map(c => ({
+          ...c,
+          // no filtro por status, só conta arquivos com aquele status — mas exibe o card sempre
+          _counts: countStatuses(c.arquivos),
+          _visible: currentFilter === 'ALL' || c.arquivos.some(a => a.status === currentFilter)
+        }))
+        .filter(c => c._visible)
+    })).filter(g => g.clientes.length > 0);
+
+    if (filtered.length === 0) {
+      $content.classList.add('hidden');
+      $empty.classList.remove('hidden');
+      $empty.classList.add('flex');
+      return;
+    }
+
+    $empty.classList.add('hidden');
+    $empty.classList.remove('flex');
+    $content.classList.remove('hidden');
+    $content.innerHTML = filtered.map(renderGroup).join('');
+  }
+
+  function countStatuses(arquivos) {
+    const c = { PENDENTE: 0, PRODUCAO: 0, ENTREGUE: 0 };
+    arquivos.forEach(a => { if (c[a.status] !== undefined) c[a.status]++; });
+    return c;
+  }
+
+  // ─── Grupo de data ────────────────────────────────────────────────
+  function renderGroup(group) {
+    return `
+      <section class="mb-10 fade-in">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-1 h-6 rounded-full bg-gradient-to-b from-blue-400 to-blue-700"></div>
+          <h2 class="text-base font-bold text-white">${fmtDate(group.data)}</h2>
+          <span class="bg-gray-800/70 border border-gray-700/40 text-gray-400 text-[11px] font-semibold px-2 py-0.5 rounded-full">
+            ${group.clientes.length} OS
+          </span>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          ${group.clientes.map(c => renderCard(group.data, c)).join('')}
+        </div>
+      </section>
+    `;
+  }
+
+  // ─── Card de cliente ──────────────────────────────────────────────
+  function renderCard(data, cliente) {
+    const counts = cliente._counts || countStatuses(cliente.arquivos);
+    const total  = cliente.arquivos.length;
+
+    // Barra de progresso visual (proporção entregues)
+    const pct = total > 0 ? Math.round((counts.ENTREGUE / total) * 100) : 0;
+
+    // Badges de resumo
+    const badges = Object.entries(counts)
+      .filter(([, n]) => n > 0)
+      .map(([s, n]) => `
+        <span class="flex items-center gap-1 text-[10px] font-bold ${STATUS[s].badge} px-1.5 py-0.5 rounded-md">
+          <span class="w-1.5 h-1.5 rounded-full ${STATUS[s].dot}"></span>${n}
+        </span>`
+      ).join('');
+
+    // Cor dominante do card (status com mais arquivos)
+    const dominant = Object.entries(counts).sort((a,b) => b[1]-a[1])[0]?.[0] || 'PENDENTE';
+    const accentMap = { PENDENTE: 'border-amber-500/30', PRODUCAO: 'border-blue-500/30', ENTREGUE: 'border-emerald-500/30' };
+    const accent = counts.ENTREGUE === total && total > 0 ? accentMap.ENTREGUE : accentMap[dominant];
+
+    return `
+      <div
+        onclick="openModal('${data}', '${cliente.nome}')"
+        class="card-enter group cursor-pointer bg-gray-800/40 border ${accent}
+               rounded-2xl p-4 flex flex-col gap-3
+               hover:bg-gray-800/70 hover:shadow-xl hover:shadow-black/30
+               hover:-translate-y-0.5 transition-all duration-200">
+
+        <!-- Cabeçalho -->
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <h3 class="font-bold text-white text-sm truncate group-hover:text-blue-300 transition-colors">
+              ${fmtClient(cliente.nome)}
+            </h3>
+            <p class="text-[11px] text-gray-500 mt-0.5">${fmtDate(data)}</p>
+          </div>
+          <svg class="w-3.5 h-3.5 text-gray-600 group-hover:text-gray-400 flex-shrink-0 mt-0.5 transition-colors"
+            fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+          </svg>
+        </div>
+
+        <!-- Badges de status -->
+        <div class="flex flex-wrap gap-1.5">${badges || '<span class="text-[11px] text-gray-600 italic">Sem arquivos</span>'}</div>
+
+        <!-- Barra de progresso -->
+        <div class="flex flex-col gap-1.5">
+          <div class="flex justify-between items-center">
+            <span class="text-[10px] text-gray-600">${total} arquivo${total !== 1 ? 's' : ''}</span>
+            <span class="text-[10px] font-semibold ${pct === 100 ? 'text-emerald-400' : 'text-gray-500'}">${pct}%</span>
+          </div>
+          <div class="h-1 bg-gray-700/60 rounded-full overflow-hidden">
+            <div class="h-full rounded-full transition-all duration-500
+              ${pct === 100 ? 'bg-emerald-500' : 'bg-blue-500'}"
+              style="width:${pct}%"></div>
+          </div>
+        </div>
+
+        <!-- Hint -->
+        <p class="text-[10px] text-gray-700 group-hover:text-gray-500 transition-colors text-right -mt-1">
+          Clique para gerenciar →
+        </p>
+
+      </div>
+    `;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  Modal
+  // ═══════════════════════════════════════════════════════════════════
+  function openModal(data, clienteNome) {
+    modalState = { data, clienteNome };
+    document.body.style.overflow = 'hidden';
+
+    const backdrop = document.getElementById('modal-backdrop');
+    // força display:flex antes da transição
+    backdrop.style.display = 'flex';
+    requestAnimationFrame(() => {
+      backdrop.classList.add('open');
+    });
+
+    refreshModal();
+  }
+
+  function refreshModal() {
+    if (!modalState) return;
+    const { data, clienteNome } = modalState;
+
+    const group   = allData.find(g => g.data === data);
+    const cliente = group?.clientes.find(c => c.nome === clienteNome);
+    if (!cliente) return;
+
+    const counts = countStatuses(cliente.arquivos);
+    const total  = cliente.arquivos.length;
+
+    // Título
+    document.getElementById('modal-title').textContent    = fmtClient(clienteNome);
+    document.getElementById('modal-subtitle').textContent = `${fmtDate(data)} · ${total} arquivo${total !== 1 ? 's' : ''}`;
+    document.getElementById('modal-total').textContent    = `${counts.ENTREGUE} de ${total} entregue${counts.ENTREGUE !== 1 ? 's' : ''}`;
+
+    // Mini contadores
+    document.getElementById('modal-counts').innerHTML = Object.entries(counts)
+      .map(([s, n]) => `
+        <div class="flex items-center gap-1.5 ${STATUS[s].badge} px-2.5 py-1 rounded-lg">
+          <span class="w-2 h-2 rounded-full ${STATUS[s].dot}"></span>
+          <span class="text-[11px] font-semibold">${STATUS[s].label}</span>
+          <span class="text-xs font-bold">${n}</span>
+        </div>`
+      ).join('');
+
+    // Arquivos — pendentes primeiro
+    const order = { PENDENTE: 0, PRODUCAO: 1, ENTREGUE: 2 };
+    const sorted = [...cliente.arquivos].sort((a, b) => order[a.status] - order[b.status]);
+
+    document.getElementById('modal-files').innerHTML = sorted.length
+      ? sorted.map(arq => renderModalRow(data, clienteNome, arq)).join('')
+      : '<p class="text-center text-gray-600 text-sm py-8">Nenhum arquivo nesta pasta</p>';
+  }
+
+  function renderModalRow(data, clienteNome, arq) {
+    const cfg  = STATUS[arq.status] || STATUS.PENDENTE;
+    const btns = modalStatusBtns(data, clienteNome, arq.nome, arq.status);
+    const dl   = downloadBtn(data, clienteNome, arq.nome);
+
+    return `
+      <div class="flex items-center gap-3 px-4 py-3 hover:bg-gray-800/40 transition-colors"
+           id="mrow-${slugId(data, clienteNome, arq.nome)}">
+        <span class="text-lg flex-shrink-0">${fileIcon(arq.nome)}</span>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm text-gray-100 font-medium truncate">${arq.nome}</p>
+          <span class="inline-flex items-center gap-1 mt-0.5 text-[10px] font-semibold ${cfg.badge} px-1.5 py-0.5 rounded">
+            <span class="w-1.5 h-1.5 rounded-full ${cfg.dot}"></span>${cfg.label}
+          </span>
+        </div>
+        <div class="flex items-center gap-1.5 flex-shrink-0">
+          ${dl}
+          <div class="w-px h-4 bg-gray-700/60"></div>
+          <div class="flex gap-1">${btns}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  function modalStatusBtns(data, clienteNome, arquivo, currentStatus) {
+    return Object.entries(STATUS).map(([key, val]) => {
+      const isActive = key === currentStatus;
+      return `<button
+        class="btn-status px-2.5 py-1 rounded-md text-[11px] font-semibold border transition-all
+               ${isActive ? val.active : val.hover}"
+        onclick="changeStatus('${data}','${clienteNome}','${arquivo}','${key}')"
+        ${isActive ? 'disabled' : ''}
+      >${val.label}</button>`;
+    }).join('');
+  }
+
+  function downloadBtn(data, clienteNome, arquivo) {
+    const url = `/api/download?data=${encodeURIComponent(data)}&cliente=${encodeURIComponent(clienteNome)}&arquivo=${encodeURIComponent(arquivo)}`;
+    return `
+      <a href="${url}" download="${arquivo}" title="Baixar ${arquivo}"
+        class="flex items-center justify-center w-7 h-7 rounded-lg border border-gray-700/50
+               text-gray-500 hover:text-white hover:bg-blue-600/20 hover:border-blue-500/40
+               transition-all" onclick="event.stopPropagation()">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+        </svg>
+      </a>
+    `;
+  }
+
+  function closeModal(event) {
+    // fecha só se clicar no backdrop (não no painel interno)
+    if (event && event.target !== document.getElementById('modal-backdrop')) return;
+    _closeModal();
+  }
+
+  function _closeModal() {
+    const backdrop = document.getElementById('modal-backdrop');
+    backdrop.classList.remove('open');
+    setTimeout(() => { backdrop.style.display = 'none'; }, 220);
+    document.body.style.overflow = '';
+    modalState = null;
+  }
+
+  // Fecha com ESC
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') _closeModal(); });
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  Atualizar status de arquivo
+  // ═══════════════════════════════════════════════════════════════════
+  async function changeStatus(data, cliente, arquivo, status) {
+    // Atualização otimista no estado local
+    const group = allData.find(g => g.data === data);
+    if (group) {
+      const cl = group.clientes.find(c => c.nome === cliente);
+      if (cl) {
+        const arq = cl.arquivos.find(a => a.nome === arquivo);
+        if (arq) arq.status = status;
+      }
+    }
+
+    // Atualiza a linha dentro do modal sem re-renderizar tudo
+    const rowId = `mrow-${slugId(data, cliente, arquivo)}`;
+    const rowEl = document.getElementById(rowId);
+    if (rowEl) {
+      const cfg  = STATUS[status];
+      const btns = modalStatusBtns(data, cliente, arquivo, status);
+      const dl   = downloadBtn(data, cliente, arquivo);
+
+      rowEl.innerHTML = `
+        <span class="text-lg flex-shrink-0">${fileIcon(arquivo)}</span>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm text-gray-100 font-medium truncate">${arquivo}</p>
+          <span class="inline-flex items-center gap-1 mt-0.5 text-[10px] font-semibold ${cfg.badge} px-1.5 py-0.5 rounded">
+            <span class="w-1.5 h-1.5 rounded-full ${cfg.dot}"></span>${cfg.label}
+          </span>
+        </div>
+        <div class="flex items-center gap-1.5 flex-shrink-0">
+          ${dl}
+          <div class="w-px h-4 bg-gray-700/60"></div>
+          <div class="flex gap-1">${btns}</div>
+        </div>
+      `;
+    }
+
+    // Atualiza contadores do modal e do header
+    if (modalState) {
+      const group2   = allData.find(g => g.data === modalState.data);
+      const cliente2 = group2?.clientes.find(c => c.nome === modalState.clienteNome);
+      if (cliente2) {
+        const counts2 = countStatuses(cliente2.arquivos);
+        const total2  = cliente2.arquivos.length;
+        document.getElementById('modal-counts').innerHTML = Object.entries(counts2)
+          .map(([s, n]) => `
+            <div class="flex items-center gap-1.5 ${STATUS[s].badge} px-2.5 py-1 rounded-lg">
+              <span class="w-2 h-2 rounded-full ${STATUS[s].dot}"></span>
+              <span class="text-[11px] font-semibold">${STATUS[s].label}</span>
+              <span class="text-xs font-bold">${n}</span>
+            </div>`
+          ).join('');
+        document.getElementById('modal-total').textContent =
+          `${counts2.ENTREGUE} de ${total2} entregue${counts2.ENTREGUE !== 1 ? 's' : ''}`;
+      }
+    }
+
+    updateStats();
+    // Atualiza card no grid (barra de progresso + badges)
+    render();
+
+    try {
+      await fetch('/api/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data, cliente, arquivo, status })
+      });
+      showToast(`${arquivo} → ${STATUS[status].label}`, 'success');
+    } catch {
+      showToast('Erro ao salvar status', 'error');
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  Contadores globais no header
+  // ═══════════════════════════════════════════════════════════════════
+  function updateStats() {
+    const c = { PENDENTE: 0, PRODUCAO: 0, ENTREGUE: 0 };
+    allData.forEach(g => g.clientes.forEach(cl =>
+      cl.arquivos.forEach(a => { if (c[a.status] !== undefined) c[a.status]++; })
+    ));
+    document.getElementById('count-pendente').textContent = c.PENDENTE;
+    document.getElementById('count-producao').textContent = c.PRODUCAO;
+    document.getElementById('count-entregue').textContent = c.ENTREGUE;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  Filtros e busca
+  // ═══════════════════════════════════════════════════════════════════
+  function setFilter(f) {
+    currentFilter = f;
+    document.querySelectorAll('.fbtn').forEach(b =>
+      b.classList.remove('bg-gray-700', 'text-white', 'shadow-sm')
+    );
+    document.getElementById('fbtn-' + f).classList.add('bg-gray-700', 'text-white', 'shadow-sm');
+    render();
+  }
+
+  function onSearch(val) {
+    searchQuery = val.trim().toLowerCase();
+    render();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  Toasts
+  // ═══════════════════════════════════════════════════════════════════
+  function showToast(msg, type = 'info') {
+    const colors = {
+      success: 'bg-emerald-950/95 border-emerald-800/60 text-emerald-200',
+      error:   'bg-red-950/95 border-red-800/60 text-red-200',
+      info:    'bg-gray-800/95 border-gray-700/60 text-gray-200'
+    };
+    const icons  = { success: '✓', error: '✕', info: 'i' };
+    const iconBg = { success: 'bg-emerald-500', error: 'bg-red-500', info: 'bg-gray-600' };
+
+    const $t = document.createElement('div');
+    $t.className = `toast pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl border
+                    text-sm font-medium backdrop-blur-md shadow-2xl max-w-xs ${colors[type]}`;
+    $t.innerHTML = `
+      <span class="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${iconBg[type]} text-white">
+        ${icons[type]}
+      </span>
+      <span class="truncate">${msg}</span>
+    `;
+    document.getElementById('toasts').appendChild($t);
+    setTimeout(() => {
+      $t.classList.add('toast-exit');
+      setTimeout(() => $t.remove(), 250);
+    }, 3000);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  Helpers
+  // ═══════════════════════════════════════════════════════════════════
+  const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  function fmtDate(s) {
+    const [d, m] = s.replace(',', '.').split('.');
+    return `${parseInt(d)} ${MESES[parseInt(m) - 1] || m}`;
+  }
+  function fmtClient(name) {
+    return name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  }
+  // ID seguro para uso em atributos HTML (remove caracteres problemáticos)
+  function slugId(...parts) {
+    return parts.join('__').replace(/[^a-zA-Z0-9_\-\.]/g, '_');
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  SSE
+  // ═══════════════════════════════════════════════════════════════════
+  let sse = null;
+  function connectSSE() {
+    sse = new EventSource('/api/events');
+    sse.onopen = () => {
+      const $d = document.getElementById('conn-dot');
+      $d.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 shadow shadow-emerald-500/50 transition-all duration-500 cursor-default ml-1';
+      $d.title = 'Conectado — tempo real';
+    };
+    sse.onmessage = () => fetchData(true);
+    sse.onerror = () => {
+      const $d = document.getElementById('conn-dot');
+      $d.className = 'w-2.5 h-2.5 rounded-full bg-red-400 transition-all duration-500 cursor-default ml-1';
+      $d.title = 'Reconectando...';
+      sse.close();
+      setTimeout(connectSSE, 5000);
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  Init
+  // ═══════════════════════════════════════════════════════════════════
+  fetchData();
+  connectSSE();
+  setInterval(() => fetchData(true), 30000);
+  setFilter('ALL');
+  </script>
+</body>
+</html>

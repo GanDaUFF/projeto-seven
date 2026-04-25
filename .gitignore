@@ -1,0 +1,9 @@
+node_modules/
+backend/node_modules/
+data/status.json
+impressao/
+.claude/
+.env
+*.log
+Thumbs.db
+desktop.ini

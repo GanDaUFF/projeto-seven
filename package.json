@@ -1,0 +1,10 @@
+{
+  "name": "gestao-os",
+  "version": "1.0.0",
+  "description": "Sistema de gestão de ordens de serviço para impressão",
+  "scripts": {
+    "postinstall": "npm install --prefix backend",
+    "dev": "node backend/server.js",
+    "start": "node backend/server.js"
+  }
+}
