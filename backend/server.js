@@ -4,7 +4,12 @@ const path = require('path');
 const fs = require('fs');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
-const { getStatuses, updateStatus, getPagamentos, updatePagamento, VALID_STATUSES } = require('./db');
+const {
+  getStatuses, updateStatus,
+  getPagamentos, updatePagamento,
+  getOrCreateToken, findClientByToken,
+  VALID_STATUSES
+} = require('./db');
 const { startWatcher } = require('./watcher');
 const { generateOS } = require('./generateOS');
 const { getNgrokUrl } = require('./ngrok');
@@ -35,7 +40,7 @@ app.use(express.static(FRONTEND_DIR));
 // ─── Middleware de API Key ────────────────────────────────────────────────────
 // Rotas que não exigem autenticação mesmo com API_KEY configurada
 // Nota: req.path dentro de app.use('/api') é relativo, sem o prefixo /api
-const PUBLIC_ROUTES = new Set(['/tunnel-url', '/config', '/events']);
+const PUBLIC_ROUTES = new Set(['/tunnel-url', '/config', '/events', '/token']);
 
 app.use('/api', (req, res, next) => {
   const apiKey = process.env.API_KEY;
@@ -236,6 +241,51 @@ app.get('/api/events', (req, res) => {
     clearInterval(heartbeat);
     sseClients.delete(res);
   });
+});
+
+// ─── Rotas públicas (sem autenticação) ───────────────────────────────────────
+
+// POST /api/token — gera ou recupera token de compartilhamento de um cliente
+app.post('/api/token', (req, res) => {
+  const { data, cliente } = req.body;
+  if (!data || !cliente) {
+    return res.status(400).json({ error: 'data e cliente são obrigatórios' });
+  }
+  const token = getOrCreateToken(data, cliente);
+  res.json({ token });
+});
+
+// GET /public/cliente/:token — retorna dados do cliente (sem auth, só leitura)
+app.get('/public/cliente/:token', (req, res) => {
+  const found = findClientByToken(req.params.token);
+  if (!found) return res.status(404).json({ error: 'Token inválido ou expirado' });
+
+  const { data, cliente: clienteNome } = found;
+  const statuses   = getStatuses();
+  const pagamentos = getPagamentos();
+
+  const clientePath = path.join(IMPRESSAO_DIR, data, clienteNome);
+  let arquivos = [];
+  try {
+    arquivos = fs.readdirSync(clientePath)
+      .filter(f => { try { return fs.statSync(path.join(clientePath, f)).isFile(); } catch { return false; } })
+      .sort();
+  } catch {}
+
+  res.json({
+    cliente: clienteNome,
+    data,
+    pago: pagamentos[`${data}/${clienteNome}`] ?? false,
+    arquivos: arquivos.map(nome => ({
+      nome,
+      status: statuses[`${data}/${clienteNome}/${nome}`] || 'PENDENTE'
+    }))
+  });
+});
+
+// Serve a página pública do cliente (antes do fallback SPA)
+app.get('/cliente/:token', (req, res) => {
+  res.sendFile(path.join(FRONTEND_DIR, 'cliente.html'));
 });
 
 // SPA fallback — qualquer rota não encontrada serve o index.html

@@ -1,5 +1,6 @@
-const fs   = require('fs');
-const path = require('path');
+const fs     = require('fs');
+const path   = require('path');
+const crypto = require('crypto');
 
 const DATA_DIR    = path.join(__dirname, '..', 'data');
 const STATUS_FILE = path.join(DATA_DIR, 'status.json');
@@ -50,4 +51,35 @@ function updatePagamento(data, cliente, pago) {
   writeFile(all);
 }
 
-module.exports = { getStatuses, updateStatus, getPagamentos, updatePagamento, VALID_STATUSES };
+// ─── Tokens de compartilhamento  (chave: "tok:DD.MM/cliente") ────────────────
+
+function getOrCreateToken(data, cliente) {
+  const all = readFile();
+  const key = `tok:${data}/${cliente}`;
+  if (!all[key]) {
+    all[key] = crypto.randomBytes(16).toString('hex'); // 32 chars hex
+    writeFile(all);
+  }
+  return all[key];
+}
+
+function findClientByToken(token) {
+  const all = readFile();
+  for (const [k, v] of Object.entries(all)) {
+    if (k.startsWith('tok:') && v === token) {
+      const rest   = k.slice(4);              // "DD.MM/cliente"
+      const slash  = rest.indexOf('/');
+      const data   = rest.slice(0, slash);
+      const cliente = rest.slice(slash + 1);
+      return { data, cliente };
+    }
+  }
+  return null;
+}
+
+module.exports = {
+  getStatuses, updateStatus,
+  getPagamentos, updatePagamento,
+  getOrCreateToken, findClientByToken,
+  VALID_STATUSES
+};

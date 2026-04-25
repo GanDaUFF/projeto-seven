@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Acompanhe seu Pedido — Seven</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    body { font-family: 'Inter', system-ui, sans-serif; }
+
+    .fade-in { animation: fadeIn 0.3s ease both; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+    .item-enter { animation: itemEnter 0.2s ease both; }
+    @keyframes itemEnter { from { opacity: 0; } to { opacity: 1; } }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    .dot-pulse { animation: pulse-dot 2s infinite; }
+
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
+  </style>
+</head>
+<body class="bg-[#0d0d12] text-gray-100 min-h-screen antialiased">
+
+  <!-- ── Loading ─────────────────────────────────────────────────────── -->
+  <div id="state-loading" class="flex flex-col items-center justify-center min-h-screen gap-4">
+    <div class="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+    <p class="text-gray-500 text-sm">Carregando pedido...</p>
+  </div>
+
+  <!-- ── Erro ────────────────────────────────────────────────────────── -->
+  <div id="state-error" class="hidden flex-col items-center justify-center min-h-screen gap-4 text-center px-4">
+    <div class="w-16 h-16 bg-red-900/30 border border-red-800/40 rounded-2xl flex items-center justify-center">
+      <svg class="w-7 h-7 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+      </svg>
+    </div>
+    <div>
+      <p class="text-gray-300 font-semibold">Link inválido ou expirado</p>
+      <p class="text-gray-600 text-sm mt-1">Solicite um novo link ao atendente.</p>
+    </div>
+  </div>
+
+  <!-- ── Conteúdo ─────────────────────────────────────────────────────── -->
+  <div id="state-content" class="hidden min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-[#111118] border-b border-gray-800/80">
+      <div class="max-w-2xl mx-auto px-4 py-5 flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-lg shadow-blue-900/40">
+            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+          </div>
+          <div>
+            <h1 class="text-sm font-bold text-white leading-tight">Seven Impressão</h1>
+            <p class="text-[11px] text-gray-500 leading-tight">Acompanhe seu pedido</p>
+          </div>
+        </div>
+        <!-- Indicador de atualização -->
+        <div class="flex items-center gap-1.5 text-[11px] text-gray-600">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 dot-pulse"></span>
+          <span id="last-refresh">Atualizando...</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Card do cliente -->
+    <main class="max-w-2xl mx-auto px-4 py-8 flex-1 w-full">
+
+      <div class="fade-in bg-gray-800/40 border border-gray-700/50 rounded-2xl overflow-hidden">
+
+        <!-- Cabeçalho do card -->
+        <div class="px-6 py-5 border-b border-gray-700/50">
+          <div class="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <p class="text-[11px] text-gray-500 font-medium uppercase tracking-wider mb-1">Cliente</p>
+              <h2 id="cliente-nome" class="text-xl font-bold text-white"></h2>
+              <p id="cliente-data" class="text-sm text-gray-500 mt-0.5"></p>
+            </div>
+            <span id="pag-badge"
+              class="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border">
+            </span>
+          </div>
+
+          <!-- Progresso geral -->
+          <div class="mt-4 flex flex-col gap-1.5">
+            <div class="flex justify-between text-[11px]">
+              <span class="text-gray-500">Progresso da produção</span>
+              <span id="pct-label" class="font-semibold text-gray-400"></span>
+            </div>
+            <div class="h-2 bg-gray-700/60 rounded-full overflow-hidden">
+              <div id="progress-bar"
+                class="h-full rounded-full transition-all duration-700 bg-blue-500"></div>
+            </div>
+          </div>
+
+          <!-- Badges de contagem -->
+          <div id="status-counts" class="flex flex-wrap gap-2 mt-3"></div>
+        </div>
+
+        <!-- Lista de arquivos -->
+        <div id="arquivo-list" class="divide-y divide-gray-700/40"></div>
+
+        <!-- Rodapé -->
+        <div class="px-6 py-4 bg-gray-900/30 flex items-center justify-between">
+          <p class="text-[11px] text-gray-600">
+            Atualização automática a cada 30 segundos
+          </p>
+          <button onclick="fetchPedido()"
+            class="text-[11px] font-semibold text-blue-400 hover:text-blue-300 transition-colors">
+            Atualizar agora
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Mensagem de apoio -->
+      <p class="text-center text-[12px] text-gray-700 mt-6">
+        Dúvidas? Entre em contato com a Seven Impressão.
+      </p>
+    </main>
+
+  </div>
+
+  <script>
+  // ════════════════════════════════════════════════════════════════
+  //  Config de status (somente leitura)
+  // ════════════════════════════════════════════════════════════════
+  const STATUS = {
+    PENDENTE: { label: 'Pendente', dot: 'bg-amber-400',  badge: 'bg-amber-400/10 text-amber-300 border border-amber-400/25',  icon: '⏳' },
+    PRODUCAO: { label: 'Produção', dot: 'bg-blue-400',   badge: 'bg-blue-400/10  text-blue-300  border border-blue-400/25',   icon: '⚙️' },
+    FEITO:    { label: 'Feito',    dot: 'bg-purple-400', badge: 'bg-purple-400/10 text-purple-300 border border-purple-400/25', icon: '✅' },
+    ENTREGUE: { label: 'Entregue', dot: 'bg-emerald-400',badge: 'bg-emerald-400/10 text-emerald-300 border border-emerald-400/25', icon: '📦' }
+  };
+
+  const FILE_ICONS = {
+    pdf:'📄', jpg:'🖼️', jpeg:'🖼️', png:'🖼️', gif:'🖼️',
+    ai:'🎨', psd:'🎨', cdr:'🎨', svg:'🎨',
+    mp4:'🎬', mov:'🎬', zip:'📦', rar:'📦'
+  };
+  const fileIcon = name => FILE_ICONS[name.split('.').pop()?.toLowerCase()] ?? '📎';
+
+  const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  function fmtDate(s) {
+    const [d, m] = s.replace(',', '.').split('.');
+    return `${parseInt(d)} de ${MESES[parseInt(m) - 1] || m}`;
+  }
+  function fmtClient(name) {
+    return name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  //  Token da URL
+  // ════════════════════════════════════════════════════════════════
+  const token = location.pathname.split('/cliente/')[1];
+
+  // ════════════════════════════════════════════════════════════════
+  //  Fetch
+  // ════════════════════════════════════════════════════════════════
+  async function fetchPedido() {
+    try {
+      const res  = await fetch(`/public/cliente/${token}`);
+      if (!res.ok) throw new Error('not found');
+      const data = await res.json();
+      render(data);
+
+      const el = document.getElementById('last-refresh');
+      el.textContent = 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      showError();
+    }
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  //  Render
+  // ════════════════════════════════════════════════════════════════
+  function render(d) {
+    document.getElementById('state-loading').classList.add('hidden');
+    document.getElementById('state-error').classList.add('hidden');
+    const content = document.getElementById('state-content');
+    content.classList.remove('hidden');
+    content.classList.add('flex');
+
+    document.title = `${fmtClient(d.cliente)} — Seven`;
+    document.getElementById('cliente-nome').textContent = fmtClient(d.cliente);
+    document.getElementById('cliente-data').textContent = fmtDate(d.data);
+
+    // Badge de pagamento
+    const pagBadge = document.getElementById('pag-badge');
+    if (d.pago) {
+      pagBadge.className = 'flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
+      pagBadge.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Pago`;
+    } else {
+      pagBadge.className = 'flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border bg-amber-500/10 text-amber-400 border-amber-500/20';
+      pagBadge.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg> Pagamento pendente`;
+    }
+
+    // Progresso (baseado em FEITO + ENTREGUE)
+    const arquivos = d.arquivos.filter(a => !a.nome.startsWith('OS_') && a.nome !== 'Thumbs.db');
+    const total    = arquivos.length;
+    const prontos  = arquivos.filter(a => a.status === 'FEITO' || a.status === 'ENTREGUE').length;
+    const pct      = total > 0 ? Math.round((prontos / total) * 100) : 0;
+
+    document.getElementById('pct-label').textContent    = `${pct}%`;
+    document.getElementById('progress-bar').style.width = pct + '%';
+    document.getElementById('progress-bar').className   =
+      `h-full rounded-full transition-all duration-700 ${pct === 100 ? 'bg-emerald-500' : 'bg-blue-500'}`;
+
+    // Contagens por status
+    const counts = { PENDENTE: 0, PRODUCAO: 0, FEITO: 0, ENTREGUE: 0 };
+    arquivos.forEach(a => { if (counts[a.status] !== undefined) counts[a.status]++; });
+
+    document.getElementById('status-counts').innerHTML = Object.entries(counts)
+      .filter(([, n]) => n > 0)
+      .map(([s, n]) => `
+        <span class="flex items-center gap-1.5 text-[11px] font-semibold ${STATUS[s].badge} px-2.5 py-1 rounded-lg">
+          <span class="w-2 h-2 rounded-full ${STATUS[s].dot}"></span>
+          ${STATUS[s].label}: ${n}
+        </span>`
+      ).join('');
+
+    // Lista de arquivos — oculta .docx de OS e Thumbs.db
+    const order = { PENDENTE: 0, PRODUCAO: 1, FEITO: 2, ENTREGUE: 3 };
+    const sorted = [...arquivos].sort((a, b) => order[a.status] - order[b.status]);
+
+    document.getElementById('arquivo-list').innerHTML = sorted.length
+      ? sorted.map(arq => {
+          const cfg = STATUS[arq.status] || STATUS.PENDENTE;
+          return `
+            <div class="item-enter flex items-center gap-3 px-6 py-3.5 hover:bg-gray-700/10 transition-colors">
+              <span class="text-lg flex-shrink-0">${fileIcon(arq.nome)}</span>
+              <p class="flex-1 text-sm text-gray-200 font-medium truncate">${arq.nome}</p>
+              <span class="flex-shrink-0 flex items-center gap-1.5 text-[11px] font-semibold ${cfg.badge} px-2.5 py-1 rounded-lg">
+                <span class="w-1.5 h-1.5 rounded-full ${cfg.dot}"></span>
+                ${cfg.label}
+              </span>
+            </div>`;
+        }).join('')
+      : '<p class="text-center text-gray-600 text-sm py-8">Nenhum arquivo encontrado</p>';
+  }
+
+  function showError() {
+    document.getElementById('state-loading').classList.add('hidden');
+    const err = document.getElementById('state-error');
+    err.classList.remove('hidden');
+    err.classList.add('flex');
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  //  Init
+  // ════════════════════════════════════════════════════════════════
+  if (!token) {
+    showError();
+  } else {
+    fetchPedido();
+    setInterval(fetchPedido, 30000);
+  }
+  </script>
+</body>
+</html>

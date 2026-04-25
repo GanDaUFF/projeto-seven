@@ -331,15 +331,9 @@
     }
   }
 
-  async function copyTunnelUrl() {
+  function copyTunnelUrl() {
     if (!_tunnelUrl) return;
-    try {
-      await navigator.clipboard.writeText(_tunnelUrl);
-      showToast('Link copiado: ' + _tunnelUrl, 'success');
-    } catch {
-      // Fallback para navegadores sem clipboard API
-      prompt('Copie o link:', _tunnelUrl);
-    }
+    copyToClipboard(_tunnelUrl);
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -572,9 +566,18 @@
             </svg>
             <span>${cliente.pago ? 'Desmarcar' : 'Marcar pago'}</span>
           </button>
-          <p class="text-[10px] text-gray-700 group-hover:text-gray-500 transition-colors ml-auto">
-            Ver →
-          </p>
+          <button
+            onclick="compartilhar(event, '${data}', '${cliente.nome}')"
+            class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border
+                   bg-gray-700/40 text-gray-400 border-gray-600/40
+                   hover:bg-gray-600/40 hover:text-gray-200 hover:border-gray-500/60
+                   transition-all ml-auto">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
+            </svg>
+            <span>Compartilhar</span>
+          </button>
         </div>
 
       </div>
@@ -974,6 +977,86 @@
     } catch {
       showToast('Erro ao atualizar pagamento', 'error');
     }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  Compartilhamento
+  // ═══════════════════════════════════════════════════════════════════
+
+  async function compartilhar(event, data, cliente) {
+    event.stopPropagation();
+    const btn  = event.currentTarget;
+    const span = btn.querySelector('span');
+    span.textContent = 'Gerando…';
+    btn.disabled = true;
+
+    try {
+      const res  = await apiFetch('/api/token', {
+        method: 'POST',
+        body: JSON.stringify({ data, cliente })
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
+
+      // Prioridade: tunnel ngrok → origem atual (IP de rede ou localhost)
+      const base = _tunnelUrl || window.location.origin;
+      const link = `${base}/cliente/${json.token}`;
+
+      copyToClipboard(link);
+    } catch (err) {
+      showToast('Erro ao gerar link: ' + err.message, 'error');
+    } finally {
+      span.textContent = 'Compartilhar';
+      btn.disabled = false;
+    }
+  }
+
+  // Copia texto com fallback para HTTP/rede (clipboard API exige HTTPS ou localhost)
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text)
+        .then(() => showToast('Link copiado!', 'success'))
+        .catch(() => copyFallback(text));
+    } else {
+      copyFallback(text);
+    }
+  }
+
+  function copyFallback(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try {
+      document.execCommand('copy');
+      showToast('Link copiado!', 'success');
+    } catch {
+      // Último recurso: mostra o link para o usuário copiar manualmente
+      showLinkModal(text);
+    }
+    document.body.removeChild(ta);
+  }
+
+  function showLinkModal(link) {
+    const overlay = document.createElement('div');
+    overlay.className = 'fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm';
+    overlay.innerHTML = `
+      <div class="bg-[#17171f] border border-gray-700/60 rounded-2xl p-5 w-full max-w-sm shadow-2xl">
+        <p class="text-sm font-semibold text-white mb-1">Link de compartilhamento</p>
+        <p class="text-[11px] text-gray-500 mb-3">Copie o link abaixo:</p>
+        <input readonly value="${link}"
+          class="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-xs text-emerald-300 font-mono mb-4 focus:outline-none select-all"
+          onclick="this.select()"/>
+        <button onclick="this.closest('.fixed').remove()"
+          class="w-full py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-sm font-semibold text-gray-200 transition-colors">
+          Fechar
+        </button>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector('input').select();
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
   }
 
   // ═══════════════════════════════════════════════════════════════════
