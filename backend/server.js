@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { getStatuses, updateStatus } = require('./db');
 const { startWatcher } = require('./watcher');
+const { generateOS } = require('./generateOS');
 
 const app = express();
 const ROOT = path.join(__dirname, '..');
@@ -132,6 +133,24 @@ app.post('/api/status', (req, res) => {
   updateStatus(data, cliente, arquivo, status);
   broadcastUpdate();
   res.json({ success: true });
+});
+
+// POST /api/generate-os — gera o arquivo .docx da O.S. e salva na pasta do cliente
+app.post('/api/generate-os', async (req, res) => {
+  const { data, cliente } = req.body;
+
+  if (!data || !cliente) {
+    return res.status(400).json({ error: 'Campos data e cliente são obrigatórios' });
+  }
+
+  try {
+    const { fileName, filePath } = await generateOS(IMPRESSAO_DIR, data, cliente);
+    broadcastUpdate(); // atualiza o watcher/frontend com o novo arquivo
+    res.json({ success: true, fileName, filePath });
+  } catch (err) {
+    console.error('[generate-os]', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // GET /api/download — serve o arquivo para download
