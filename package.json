@@ -5,6 +5,11 @@
   "scripts": {
     "postinstall": "npm install --prefix backend",
     "dev": "node backend/server.js",
-    "start": "node backend/server.js"
+    "start": "node backend/server.js",
+    "tunnel": "ngrok.exe http 3000",
+    "dev:tunnel": "concurrently --names \"SERVER,NGROK\" --prefix-colors \"blue,magenta\" \"npm run dev\" \"npm run tunnel\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }

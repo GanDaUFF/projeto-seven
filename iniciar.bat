@@ -16,10 +16,20 @@ for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /i "IPv4"') do (
 :found
 set IP=%IP: =%
 
-echo  Iniciando servidor...
-echo.
 echo  Acesso local:    http://localhost:3000
 echo  Acesso na rede:  http://%IP%:3000
+echo.
+
+:: Verifica se ngrok.exe existe na pasta
+if exist "%~dp0ngrok.exe" (
+    echo  [NGROK] Iniciando túnel externo...
+    start "ngrok" /min "%~dp0ngrok.exe" http 3000
+    echo  [NGROK] Aguarde alguns segundos e acesse http://localhost:4040
+    echo  [NGROK] A URL pública aparecerá automaticamente no sistema.
+) else (
+    echo  [NGROK] ngrok.exe não encontrado — rodando apenas na rede local.
+)
+
 echo.
 echo  Pressione Ctrl+C para encerrar.
 echo  ─────────────────────────────────────────

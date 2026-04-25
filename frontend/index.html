@@ -56,6 +56,14 @@
     ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
 
     .btn-status:disabled { cursor: default; }
+
+    /* ── Tunnel pill ───────────────────────────────────── */
+    .tunnel-pill { transition: all 0.4s ease; }
+    @keyframes pulse-green {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
+    }
+    .dot-live { animation: pulse-green 2s infinite; }
   </style>
 </head>
 <body class="bg-[#0d0d12] text-gray-100 min-h-screen antialiased">
@@ -155,12 +163,46 @@
           <span class="text-[11px] text-gray-400 font-medium">Entregue</span>
           <span id="count-entregue" class="text-sm font-bold text-emerald-400 min-w-[16px] text-right">0</span>
         </div>
+        <!-- Indicador local / ngrok -->
+        <div id="tunnel-pill"
+          class="tunnel-pill hidden items-center gap-2 rounded-lg px-3 py-1.5 border text-[11px] font-semibold">
+          <span id="tunnel-dot" class="w-2 h-2 rounded-full flex-shrink-0"></span>
+          <span id="tunnel-label" class="whitespace-nowrap"></span>
+        </div>
+
         <div id="conn-dot" title="Desconectado"
           class="w-2.5 h-2.5 rounded-full bg-gray-600 transition-all duration-500 cursor-default ml-1"></div>
       </div>
 
     </div>
   </header>
+
+  <!-- ══ BANNER DE TÚNEL (aparece só quando ngrok está ativo) ════════ -->
+  <div id="tunnel-banner" class="hidden">
+    <div class="bg-gradient-to-r from-emerald-950/80 to-teal-950/80 border-b border-emerald-800/40 backdrop-blur-sm">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 flex items-center justify-between gap-4 flex-wrap">
+        <div class="flex items-center gap-2.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 dot-live flex-shrink-0"></span>
+          <span class="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider">Acesso externo ativo</span>
+          <span class="text-gray-600 text-[11px]">·</span>
+          <span class="text-[11px] text-gray-400">Compartilhe este link:</span>
+          <a id="tunnel-url-link" href="#" target="_blank"
+            class="text-[12px] font-bold text-emerald-300 hover:text-white underline underline-offset-2 transition-colors truncate max-w-[280px] sm:max-w-none">
+          </a>
+        </div>
+        <button onclick="copyTunnelUrl()"
+          class="flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-bold
+                 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30
+                 hover:bg-emerald-500/30 hover:text-white transition-all flex-shrink-0">
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+          </svg>
+          Copiar link
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- ══ FILTROS ════════════════════════════════════════════════════════ -->
   <div class="bg-[#111118]/80 border-b border-gray-800/60 sticky top-[73px] z-30 backdrop-blur-sm">
@@ -216,6 +258,84 @@
 
   <script>
   // ═══════════════════════════════════════════════════════════════════
+  //  Config e autenticação
+  // ═══════════════════════════════════════════════════════════════════
+  let _apiKey    = null;
+  let _tunnelUrl = null;
+
+  // Inicializa a config do servidor (API key + estado do túnel)
+  async function initConfig() {
+    try {
+      const res  = await fetch('/api/config');
+      const json = await res.json();
+      _apiKey = json.apiKey || null;
+    } catch { /* sem config, continua sem chave */ }
+  }
+
+  // Wrapper de fetch que injeta automaticamente o header x-api-key
+  function apiFetch(url, opts = {}) {
+    const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+    if (_apiKey) headers['x-api-key'] = _apiKey;
+    return fetch(url, { ...opts, headers });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  Túnel ngrok
+  // ═══════════════════════════════════════════════════════════════════
+
+  async function fetchTunnelUrl() {
+    try {
+      const res  = await fetch('/api/tunnel-url');
+      const json = await res.json();
+      _tunnelUrl = json.url || null;
+    } catch {
+      _tunnelUrl = null;
+    }
+    renderTunnelIndicator();
+  }
+
+  function renderTunnelIndicator() {
+    const pill   = document.getElementById('tunnel-pill');
+    const dot    = document.getElementById('tunnel-dot');
+    const label  = document.getElementById('tunnel-label');
+    const banner = document.getElementById('tunnel-banner');
+    const link   = document.getElementById('tunnel-url-link');
+
+    pill.classList.remove('hidden');
+    pill.classList.add('flex');
+
+    if (_tunnelUrl) {
+      // ── Pill no header (compacto) ─────────────────────────────────
+      pill.className = 'tunnel-pill flex items-center gap-2 rounded-lg px-3 py-1.5 border text-[11px] font-semibold bg-emerald-500/10 border-emerald-500/25 text-emerald-300';
+      dot.className  = 'w-2 h-2 rounded-full bg-emerald-400 dot-live flex-shrink-0';
+      label.textContent = 'Túnel ativo';
+
+      // ── Banner abaixo do header com a URL completa ────────────────
+      banner.classList.remove('hidden');
+      link.textContent = _tunnelUrl;
+      link.href        = _tunnelUrl;
+    } else {
+      // ── Sem túnel: só pill cinza ──────────────────────────────────
+      pill.className = 'tunnel-pill flex items-center gap-2 rounded-lg px-3 py-1.5 border text-[11px] font-semibold bg-gray-800/60 border-gray-700/40 text-gray-500';
+      dot.className  = 'w-2 h-2 rounded-full bg-gray-600 flex-shrink-0';
+      label.textContent = 'Local';
+
+      banner.classList.add('hidden');
+    }
+  }
+
+  async function copyTunnelUrl() {
+    if (!_tunnelUrl) return;
+    try {
+      await navigator.clipboard.writeText(_tunnelUrl);
+      showToast('Link copiado: ' + _tunnelUrl, 'success');
+    } catch {
+      // Fallback para navegadores sem clipboard API
+      prompt('Copie o link:', _tunnelUrl);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
   //  Estado
   // ═══════════════════════════════════════════════════════════════════
   let allData = [];
@@ -264,7 +384,7 @@
   // ═══════════════════════════════════════════════════════════════════
   async function fetchData(silent = false) {
     try {
-      const res = await fetch('/api/os');
+      const res = await apiFetch('/api/os');
       if (!res.ok) throw new Error('HTTP ' + res.status);
       allData = await res.json();
       render();
@@ -608,9 +728,8 @@
     render();
 
     try {
-      await fetch('/api/status', {
+      await apiFetch('/api/status', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ data, cliente, arquivo, status })
       });
       showToast(`${arquivo} → ${STATUS[status].label}`, 'success');
@@ -705,9 +824,8 @@
     setGerarLoading(btn, true);
 
     try {
-      const res = await fetch('/api/generate-os', {
+      const res = await apiFetch('/api/generate-os', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ data, cliente })
       });
       const json = await res.json();
@@ -732,9 +850,8 @@
     label.textContent = 'Gerando…';
 
     try {
-      const res = await fetch('/api/generate-os', {
+      const res = await apiFetch('/api/generate-os', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ data, cliente: clienteNome })
       });
       const json = await res.json();
@@ -781,10 +898,16 @@
   // ═══════════════════════════════════════════════════════════════════
   //  Init
   // ═══════════════════════════════════════════════════════════════════
-  fetchData();
-  connectSSE();
-  setInterval(() => fetchData(true), 30000);
-  setFilter('ALL');
+  (async () => {
+    await initConfig();       // carrega API key antes de qualquer request
+    fetchData();
+    fetchTunnelUrl();         // verifica se ngrok está ativo
+    connectSSE();
+    setFilter('ALL');
+
+    setInterval(() => fetchData(true), 30000);
+    setInterval(fetchTunnelUrl, 15000);  // atualiza status do túnel a cada 15s
+  })();
   </script>
 </body>
 </html>

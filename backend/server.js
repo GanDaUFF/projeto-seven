@@ -2,9 +2,12 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+
 const { getStatuses, updateStatus } = require('./db');
 const { startWatcher } = require('./watcher');
 const { generateOS } = require('./generateOS');
+const { getNgrokUrl } = require('./ngrok');
 
 const app = express();
 const ROOT = path.join(__dirname, '..');
@@ -28,6 +31,22 @@ const FRONTEND_DIR = path.join(ROOT, 'frontend');
 app.use(cors());
 app.use(express.json());
 app.use(express.static(FRONTEND_DIR));
+
+// ─── Middleware de API Key ────────────────────────────────────────────────────
+// Rotas que não exigem autenticação mesmo com API_KEY configurada
+// Nota: req.path dentro de app.use('/api') é relativo, sem o prefixo /api
+const PUBLIC_ROUTES = new Set(['/tunnel-url', '/config', '/events']);
+
+app.use('/api', (req, res, next) => {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey || PUBLIC_ROUTES.has(req.path)) return next();
+
+  const provided = req.headers['x-api-key'];
+  if (provided !== apiKey) {
+    return res.status(401).json({ error: 'API key inválida ou ausente' });
+  }
+  next();
+});
 
 // ─── SSE: clientes conectados para push de atualizações ───────────────────────
 const sseClients = new Set();
@@ -106,6 +125,18 @@ function readStructure() {
 }
 
 // ─── Rotas da API ─────────────────────────────────────────────────────────────
+
+// GET /api/config — retorna configurações públicas para o frontend
+// Expõe a API_KEY para que o frontend possa autenticar requisições subsequentes
+app.get('/api/config', (req, res) => {
+  res.json({ apiKey: process.env.API_KEY || null });
+});
+
+// GET /api/tunnel-url — retorna a URL pública do ngrok (se ativo)
+app.get('/api/tunnel-url', async (req, res) => {
+  const url = await getNgrokUrl();
+  res.json({ url });
+});
 
 // GET /api/os — retorna toda a estrutura com status
 app.get('/api/os', (req, res) => {
