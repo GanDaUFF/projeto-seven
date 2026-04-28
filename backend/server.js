@@ -13,6 +13,8 @@ const {
 const { startWatcher } = require('./watcher');
 const { generateOS } = require('./generateOS');
 const { getNgrokUrl } = require('./ngrok');
+const { login, ensureDefaultUser } = require('./auth');
+const authMiddleware = require('./middleware/authMiddleware');
 
 const app = express();
 const ROOT = path.join(__dirname, '..');
@@ -37,20 +39,15 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(FRONTEND_DIR));
 
-// ─── Middleware de API Key ────────────────────────────────────────────────────
-// Rotas que não exigem autenticação mesmo com API_KEY configurada
-// Nota: req.path dentro de app.use('/api') é relativo, sem o prefixo /api
-const PUBLIC_ROUTES = new Set(['/tunnel-url', '/config', '/events', '/token']);
+// ─── Autenticação JWT ─────────────────────────────────────────────────────────
+// Rotas que não exigem JWT
+const JWT_PUBLIC = new Set(['/config', '/tunnel-url', '/events']);
+
+app.post('/api/login', login);
 
 app.use('/api', (req, res, next) => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey || PUBLIC_ROUTES.has(req.path)) return next();
-
-  const provided = req.headers['x-api-key'];
-  if (provided !== apiKey) {
-    return res.status(401).json({ error: 'API key inválida ou ausente' });
-  }
-  next();
+  if (JWT_PUBLIC.has(req.path)) return next();
+  authMiddleware(req, res, next);
 });
 
 // ─── SSE: clientes conectados para push de atualizações ───────────────────────
@@ -133,10 +130,9 @@ function readStructure() {
 
 // ─── Rotas da API ─────────────────────────────────────────────────────────────
 
-// GET /api/config — retorna configurações públicas para o frontend
-// Expõe a API_KEY para que o frontend possa autenticar requisições subsequentes
+// GET /api/config — configurações públicas do servidor
 app.get('/api/config', (req, res) => {
-  res.json({ apiKey: process.env.API_KEY || null });
+  res.json({ apiKey: null });
 });
 
 // GET /api/tunnel-url — retorna a URL pública do ngrok (se ativo)
@@ -283,6 +279,11 @@ app.get('/public/cliente/:token', (req, res) => {
   });
 });
 
+// Página de login
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(FRONTEND_DIR, 'login.html'));
+});
+
 // Serve a página pública do cliente (antes do fallback SPA)
 app.get('/cliente/:token', (req, res) => {
   res.sendFile(path.join(FRONTEND_DIR, 'cliente.html'));
@@ -294,6 +295,7 @@ app.get('*', (req, res) => {
 });
 
 // ─── Inicialização ────────────────────────────────────────────────────────────
+ensureDefaultUser();
 startWatcher(IMPRESSAO_DIR, broadcastUpdate);
 
 app.listen(PORT, () => {
