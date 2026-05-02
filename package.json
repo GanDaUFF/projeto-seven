@@ -7,7 +7,16 @@
     "dev": "node backend/server.js",
     "start": "node backend/server.js",
     "tunnel": "ngrok.exe http 3000",
-    "dev:tunnel": "concurrently --names \"SERVER,NGROK\" --prefix-colors \"blue,magenta\" \"npm run dev\" \"npm run tunnel\""
+    "dev:tunnel": "concurrently --names \"SERVER,NGROK\" --prefix-colors \"blue,magenta\" \"npm run dev\" \"npm run tunnel\"",
+    "dev:new:backend": "npm run dev --prefix new-backend",
+    "dev:new:frontend": "npm run dev --prefix new-frontend",
+    "dev:new": "concurrently --names \"NEW-API,NEW-UI\" --prefix-colors \"cyan,green\" \"npm run dev:new:backend\" \"npm run dev:new:frontend\"",
+    "build:new:backend": "npm run build --prefix new-backend",
+    "build:new:frontend": "npm run build --prefix new-frontend",
+    "build:new": "npm run build:new:backend && npm run build:new:frontend",
+    "start:new:backend": "npm run start --prefix new-backend",
+    "start:new:frontend": "npm run preview --prefix new-frontend",
+    "start:new": "concurrently --names \"NEW-API,NEW-UI\" --prefix-colors \"cyan,green\" \"npm run start:new:backend\" \"npm run start:new:frontend\""
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

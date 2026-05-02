@@ -1,0 +1,50 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body { font-family: 'Inter', system-ui, sans-serif; }
+
+.card-enter { animation: cardEnter 0.22s ease-out both; }
+@keyframes cardEnter {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in { animation: fadeIn 0.2s ease both; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.toast-in  { animation: toastIn  0.3s cubic-bezier(0.16,1,0.3,1) both; }
+.toast-out { animation: toastOut 0.22s ease-in forwards; }
+@keyframes toastIn  { from { opacity:0; transform:translateX(110%); } to { opacity:1; transform:translateX(0); } }
+@keyframes toastOut { to   { opacity:0; transform:translateX(110%); } }
+
+@keyframes pulse-green {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+.dot-live { animation: pulse-green 2s infinite; }
+
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
+
+.modal-backdrop {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+.modal-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+.modal-panel {
+  transform: scale(0.95) translateY(8px);
+  opacity: 0;
+  transition: transform 0.22s cubic-bezier(0.16,1,0.3,1), opacity 0.2s ease;
+}
+.modal-backdrop.open .modal-panel {
+  transform: scale(1) translateY(0);
+  opacity: 1;
+}
