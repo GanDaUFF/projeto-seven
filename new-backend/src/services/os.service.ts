@@ -20,7 +20,13 @@ function parseDateDir(s: string): number | null {
 export function readStructure(): OSData {
   if (!IMPRESSAO_DIR) return {};
   if (!fs.existsSync(IMPRESSAO_DIR)) {
-    fs.mkdirSync(IMPRESSAO_DIR, { recursive: true });
+    try {
+      fs.mkdirSync(IMPRESSAO_DIR, { recursive: true });
+    } catch (e) {
+      console.warn(`[os] Nao foi possivel criar ${IMPRESSAO_DIR}:`, (e as Error).message);
+      console.warn('[os] Ajuste impressaoDir em /configuracoes para um caminho valido.');
+      return {};
+    }
     return {};
   }
 

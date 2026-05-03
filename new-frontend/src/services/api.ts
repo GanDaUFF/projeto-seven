@@ -68,7 +68,7 @@ export const api = {
   },
 
   getToken(data: string, cliente: string) {
-    return request<{ token: string }>('/api/token', {
+    return request<{ token: string; url?: string }>('/api/token', {
       method: 'POST',
       body: JSON.stringify({ data, cliente }),
     });

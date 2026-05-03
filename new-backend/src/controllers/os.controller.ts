@@ -10,8 +10,8 @@ import {
   findClientByToken,
 } from '../services/db.service';
 import { generateOS } from '../services/generateOS.service';
-import { getNgrokUrl } from '../services/ngrok.service';
 import { broadcast } from '../services/sse.service';
+import { getPublicBaseUrl, joinUrl } from '../services/publicUrl.service';
 import { IMPRESSAO_DIR } from '../config';
 
 export function getOS(_req: Request, res: Response): void {
@@ -107,7 +107,8 @@ export function postToken(req: Request, res: Response): void {
     return;
   }
   const token = getOrCreateToken(data, cliente);
-  res.json({ token });
+  const url = joinUrl(getPublicBaseUrl(), `/cliente/${token}`);
+  res.json({ token, url });
 }
 
 export function getPublicCliente(req: Request, res: Response): void {
@@ -119,8 +120,7 @@ export function getPublicCliente(req: Request, res: Response): void {
   res.json(readClienteByToken(found.data, found.cliente));
 }
 
-export async function getTunnelUrl(_req: Request, res: Response): Promise<void> {
-  const url = await getNgrokUrl();
-  res.json({ url });
+export function getTunnelUrl(_req: Request, res: Response): void {
+  res.json({ url: getPublicBaseUrl() });
 }
 

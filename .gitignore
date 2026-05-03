@@ -8,6 +8,7 @@ data/status.json
 data/users.json
 data/secrets.json
 impressao/
+impressao-teste/
 .claude/
 .env
 *.log

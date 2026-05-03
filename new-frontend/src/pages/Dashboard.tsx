@@ -72,6 +72,9 @@ export default function Dashboard() {
 
   const username = localStorage.getItem('username') ?? 'seven';
 
+  // "Túnel ativo" só conta quando o publicBaseUrl aponta para fora — localhost é só fallback dev.
+  const hasPublicTunnel = !!tunnelUrl && !/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(tunnelUrl);
+
   // ── Data fetching ───────────────────────────────────────────────────────────
 
   const fetchData = useCallback(async (silent = false) => {
@@ -184,8 +187,7 @@ export default function Dashboard() {
     btn.disabled = true;
     try {
       const res  = await api.getToken(dateKey, clienteNome);
-      const base = tunnelUrl ?? window.location.origin;
-      const link = `${base}/cliente/${res.token}`;
+      const link = res.url ?? `${tunnelUrl ?? window.location.origin}/cliente/${res.token}`;
       copyToClipboard(link);
     } catch (err) {
       showToast('Erro ao gerar link: ' + (err instanceof Error ? err.message : ''), 'error');
@@ -283,9 +285,9 @@ export default function Dashboard() {
             {/* Tunnel indicator */}
             {tunnelUrl !== undefined && (
               <div className={`flex items-center gap-2 rounded-lg px-3 py-1.5 border text-[11px] font-semibold
-                ${tunnelUrl ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300' : 'bg-gray-800/60 border-gray-700/40 text-gray-500'}`}>
-                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${tunnelUrl ? 'bg-emerald-400 dot-live' : 'bg-gray-600'}`} />
-                <span>{tunnelUrl ? 'Túnel ativo' : 'Local'}</span>
+                ${hasPublicTunnel ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300' : 'bg-gray-800/60 border-gray-700/40 text-gray-500'}`}>
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${hasPublicTunnel ? 'bg-emerald-400 dot-live' : 'bg-gray-600'}`} />
+                <span>{hasPublicTunnel ? 'Túnel ativo' : 'Local'}</span>
               </div>
             )}
 
@@ -332,7 +334,7 @@ export default function Dashboard() {
       </header>
 
       {/* Tunnel banner */}
-      {tunnelUrl && (
+      {hasPublicTunnel && tunnelUrl && (
         <div className="bg-gradient-to-r from-emerald-950/80 to-teal-950/80 border-b border-emerald-800/40 backdrop-blur-sm">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-2.5">

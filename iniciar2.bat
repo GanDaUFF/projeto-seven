@@ -53,30 +53,19 @@ goto :fim
 :: ═══════════════════════════════════════════════════════════
 :producao
 echo.
-echo  [1/5] Encerrando processos anteriores...
+echo  [1/4] Encerrando processos anteriores...
 for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":3001 " 2^>nul') do (
     taskkill /f /pid %%a > nul 2>&1
 )
 for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":4173 " 2^>nul') do (
     taskkill /f /pid %%a > nul 2>&1
 )
-taskkill /f /im ngrok.exe > nul 2>&1
 timeout /t 2 /nobreak > nul
 
 call :detectar_ip
 call :verificar_deps
 
-echo  [2/5] Compilando backend (TypeScript)...
-cd /d "%~dp0new-backend"
-call npm run build
-if errorlevel 1 (
-    echo  [ERRO] Falha no build do backend. Verifique os erros acima.
-    pause
-    exit /b 1
-)
-cd /d "%~dp0"
-
-echo  [3/5] Compilando frontend (Vite build)...
+echo  [2/4] Compilando frontend (Vite build)...
 cd /d "%~dp0new-frontend"
 call npm run build
 if errorlevel 1 (
@@ -86,18 +75,26 @@ if errorlevel 1 (
 )
 cd /d "%~dp0"
 
-call :iniciar_ngrok_prod
+echo  [3/4] Compilando backend (TypeScript)...
+cd /d "%~dp0new-backend"
+call npm run build
+if errorlevel 1 (
+    echo  [ERRO] Falha no build do backend. Verifique os erros acima.
+    pause
+    exit /b 1
+)
+cd /d "%~dp0"
 
-echo  [5/5] Iniciando servidores em modo PRODUCAO...
+echo  [4/4] Iniciando backend em modo PRODUCAO (serve o frontend)...
 echo.
-echo  Backend  (Node):        http://localhost:3001
-echo  Frontend (Vite preview): http://localhost:4173
-if defined IP echo  Rede frontend:          http://%IP%:4173
+echo  App em: http://localhost:3001
+if defined IP echo  Rede:   http://%IP%:3001
+echo.
+echo  Para expor externamente, configure Cloudflare Tunnel apontando para
+echo  http://localhost:3001 e preencha publicBaseUrl em /configuracoes.
 echo.
 
-start "New Backend PROD - 3001" cmd /k "cd /d "%~dp0new-backend" && node dist/server.js"
-timeout /t 3 /nobreak > nul
-start "New Frontend PROD - 4173" cmd /k "cd /d "%~dp0new-frontend" && npx vite preview --host"
+start "New Backend PROD - 3001" cmd /k "cd /d "%~dp0new-backend" && set "NODE_ENV=production" && node dist/server.js"
 goto :fim
 
 :: ═══════════════════════════════════════════════════════════
