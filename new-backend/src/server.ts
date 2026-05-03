@@ -18,10 +18,22 @@ app.get('/health', (_, res) => {
 
 app.use('/api', routes);
 
+// Usuario padrao apenas se ALLOW_DEFAULT_USER=true (development)
 ensureDefaultUser();
-startWatcher(broadcast);
+
+// Watcher so inicia se pasta de impressao estiver configurada
+if (IMPRESSAO_DIR) {
+  startWatcher(broadcast);
+} else {
+  console.warn('[server] Pasta de impressao nao configurada. Watcher desativado.');
+  console.warn('[server] Configure via GET /api/config ou edite config.json');
+}
 
 app.listen(PORT, () => {
-  console.log(`\n✅ New backend rodando em http://localhost:${PORT}`);
-  console.log(`📁 Monitorando: ${IMPRESSAO_DIR}\n`);
+  console.log(`\nNew backend rodando em http://localhost:${PORT}`);
+  if (IMPRESSAO_DIR) {
+    console.log(`Monitorando: ${IMPRESSAO_DIR}\n`);
+  } else {
+    console.log('Pasta de impressao: NAO CONFIGURADA\n');
+  }
 });

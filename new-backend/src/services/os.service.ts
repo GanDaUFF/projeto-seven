@@ -18,6 +18,7 @@ function parseDateDir(s: string): number | null {
 }
 
 export function readStructure(): OSData {
+  if (!IMPRESSAO_DIR) return {};
   if (!fs.existsSync(IMPRESSAO_DIR)) {
     fs.mkdirSync(IMPRESSAO_DIR, { recursive: true });
     return {};

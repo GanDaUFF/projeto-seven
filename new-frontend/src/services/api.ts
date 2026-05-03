@@ -1,4 +1,12 @@
-import type { LoginResponse, OSData, ValidStatus } from '../types';
+import type {
+  LoginResponse,
+  OSData,
+  ValidStatus,
+  SetupStatusResponse,
+  SetupAdminResponse,
+  AppConfig,
+  AppConfigPatch,
+} from '../types';
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? '';
 
@@ -82,5 +90,27 @@ export const api = {
   downloadUrl(data: string, cliente: string, arquivo: string): string {
     const token = getToken() ?? '';
     return `${BASE_URL}/api/download?data=${encodeURIComponent(data)}&cliente=${encodeURIComponent(cliente)}&arquivo=${encodeURIComponent(arquivo)}&token=${encodeURIComponent(token)}`;
+  },
+
+  getSetupStatus() {
+    return request<SetupStatusResponse>('/api/setup/status');
+  },
+
+  postSetupAdmin(username: string, password: string, confirmPassword: string) {
+    return request<SetupAdminResponse>('/api/setup/admin', {
+      method: 'POST',
+      body: JSON.stringify({ username, password, confirmPassword }),
+    });
+  },
+
+  getConfig() {
+    return request<AppConfig>('/api/config');
+  },
+
+  patchConfig(patch: AppConfigPatch) {
+    return request<AppConfig>('/api/config', {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
   },
 };

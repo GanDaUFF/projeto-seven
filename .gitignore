@@ -3,8 +3,10 @@ node_modules/
 backend/node_modules/
 new-backend/dist/
 new-frontend/dist/
+config.json
 data/status.json
 data/users.json
+data/secrets.json
 impressao/
 .claude/
 .env

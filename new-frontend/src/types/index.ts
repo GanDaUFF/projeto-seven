@@ -13,10 +13,40 @@ export interface OSCliente {
 
 export type OSData = Record<string, Record<string, OSCliente>>;
 
+export interface AuthUser {
+  id: number;
+  username: string;
+  role: 'admin' | 'user';
+}
+
 export interface LoginResponse {
   token: string;
-  username?: string;
+  user: AuthUser;
 }
+
+export interface SetupStatusResponse {
+  needsSetup: boolean;
+}
+
+export interface SetupAdminResponse {
+  success: boolean;
+  user: AuthUser;
+}
+
+export interface AppConfig {
+  nomeGrafica: string;
+  telefoneGrafica: string;
+  impressaoDir: string;
+  logoPath: string;
+  publicBaseUrl: string;
+  ambiente: string;
+  impressaoDirConfigured: boolean;
+  warning?: string;
+}
+
+export type AppConfigPatch = Partial<
+  Pick<AppConfig, 'nomeGrafica' | 'telefoneGrafica' | 'impressaoDir' | 'logoPath' | 'publicBaseUrl'>
+>;
 
 export interface StatusCounts {
   PENDENTE: number;

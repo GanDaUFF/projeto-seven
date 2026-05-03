@@ -124,6 +124,3 @@ export async function getTunnelUrl(_req: Request, res: Response): Promise<void> 
   res.json({ url });
 }
 
-export function getConfig(_req: Request, res: Response): void {
-  res.json({ apiKey: null });
-}

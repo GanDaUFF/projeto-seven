@@ -12,7 +12,8 @@ export function useAuth() {
     try {
       const res = await api.login(username, password);
       localStorage.setItem('token', res.token);
-      localStorage.setItem('username', res.username ?? username);
+      localStorage.setItem('username', res.user?.username ?? username);
+      localStorage.setItem('role', res.user?.role ?? 'user');
       setToken(res.token);
       return true;
     } catch (err) {
@@ -26,6 +27,7 @@ export function useAuth() {
   const logout = useCallback(() => {
     localStorage.removeItem('token');
     localStorage.removeItem('username');
+    localStorage.removeItem('role');
     setToken(null);
   }, []);
 
