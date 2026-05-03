@@ -1,76 +1,52 @@
-import fs from 'fs';
 import crypto from 'crypto';
-import { DATA_DIR, STATUS_FILE } from '../config';
+import { statusRepository } from '../repositories/sqliteStatus.repository';
 
 export const VALID_STATUSES = ['PENDENTE', 'PRODUCAO', 'FEITO', 'ENTREGUE'] as const;
 export type ValidStatus = (typeof VALID_STATUSES)[number];
 
-function ensureDataDir(): void {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-}
-
-function readFile(): Record<string, unknown> {
-  ensureDataDir();
-  if (!fs.existsSync(STATUS_FILE)) return {};
-  try {
-    return JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8')) as Record<string, unknown>;
-  } catch {
-    return {};
-  }
-}
-
-function writeFile(data: Record<string, unknown>): void {
-  fs.writeFileSync(STATUS_FILE, JSON.stringify(data, null, 2), 'utf-8');
-}
+/**
+ * Camada fina sobre o StatusRepository. Mantida com as mesmas assinaturas que
+ * o backend ja consumia quando a fonte de dados era data/status.json — assim
+ * controllers, services de OS e rotas nao precisaram mudar com a Sprint 3A.
+ */
 
 export function getStatuses(): Record<string, string> {
-  const all = readFile();
-  const result: Record<string, string> = {};
-  for (const [k, v] of Object.entries(all)) {
-    if (!k.startsWith('pag:') && !k.startsWith('tok:')) result[k] = v as string;
-  }
-  return result;
+  return statusRepository.getAllFileStatuses();
 }
 
 export function updateStatus(data: string, cliente: string, arquivo: string, status: string): void {
-  const all = readFile();
-  all[`${data}/${cliente}/${arquivo}`] = status;
-  writeFile(all);
+  const fileKey = `${data}/${cliente}/${arquivo}`;
+  statusRepository.setFileStatus(fileKey, status);
 }
 
 export function getPagamentos(): Record<string, boolean> {
-  const all = readFile();
-  const result: Record<string, boolean> = {};
-  for (const [k, v] of Object.entries(all)) {
-    if (k.startsWith('pag:')) result[k.slice(4)] = v as boolean;
-  }
-  return result;
+  return statusRepository.getAllClientPayments();
 }
 
 export function updatePagamento(data: string, cliente: string, pago: boolean): void {
-  const all = readFile();
-  all[`pag:${data}/${cliente}`] = Boolean(pago);
-  writeFile(all);
+  const paymentKey = `${data}/${cliente}`;
+  statusRepository.setClientPayment(paymentKey, Boolean(pago));
 }
 
 export function getOrCreateToken(data: string, cliente: string): string {
-  const all = readFile();
-  const key = `tok:${data}/${cliente}`;
-  if (!all[key]) {
-    all[key] = crypto.randomBytes(16).toString('hex');
-    writeFile(all);
-  }
-  return all[key] as string;
+  const tokenKey = `${data}/${cliente}`;
+  const existing = statusRepository.getPublicToken(tokenKey);
+  if (existing) return existing;
+
+  const token = crypto.randomBytes(16).toString('hex');
+  statusRepository.setPublicToken(tokenKey, token);
+  return token;
 }
 
 export function findClientByToken(token: string): { data: string; cliente: string } | null {
-  const all = readFile();
-  for (const [k, v] of Object.entries(all)) {
-    if (k.startsWith('tok:') && v === token) {
-      const rest = k.slice(4);
-      const slash = rest.indexOf('/');
-      return { data: rest.slice(0, slash), cliente: rest.slice(slash + 1) };
-    }
-  }
-  return null;
+  const found = statusRepository.findToken(token);
+  if (!found) return null;
+
+  const slash = found.tokenKey.indexOf('/');
+  if (slash < 0) return null;
+
+  return {
+    data: found.tokenKey.slice(0, slash),
+    cliente: found.tokenKey.slice(slash + 1),
+  };
 }

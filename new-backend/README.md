@@ -52,6 +52,29 @@ npm run build:new   # builda frontend + backend
 npm run start:new   # sobe o backend em modo produção (Windows)
 ```
 
+## Persistência (SQLite, desde a Sprint 3A)
+
+A partir da Sprint 3A, status de arquivos, pagamentos e tokens públicos vivem
+em `data/seven.db` (SQLite local via `better-sqlite3`, modo WAL).
+
+**Migração automática** — no primeiro boot com `data/status.json` existente,
+o backend:
+
+1. Cria `data/seven.db` e aplica o schema.
+2. Faz backup em `data/backups/status.backup.<timestamp>.json`.
+3. Importa todas as chaves do JSON (status, `pag:`, `tok:`) para o SQLite.
+4. Marca `app_meta.status_json_migrated_at`.
+5. **Não apaga** o `status.json` (preservado para auditoria).
+
+A migração é idempotente — re-rodar não duplica e não corrompe.
+
+**Importante:** após a migração, o `status.json` deixou de ser fonte de
+verdade. Editar o arquivo manualmente não tem mais efeito. Para resetar o
+banco, apague `data/seven.db*` e reinicie — a migração roda de novo a
+partir do `status.json`.
+
+Detalhes de schema, tabelas e testes em [`../SPRINT_3A_SQLITE.md`](../SPRINT_3A_SQLITE.md).
+
 ## Cloudflare Tunnel
 
 ngrok deixou de ser o fluxo oficial. Em produção, o caminho recomendado é
@@ -74,7 +97,9 @@ Todos ficam na **raiz do repositório** (um nível acima de `new-backend/`):
 | `config.json`          | Dados da gráfica e caminhos (impressaoDir, nomeGrafica, etc).           | Auto-criado com defaults.      |
 | `data/secrets.json`    | `jwtSecret` aleatório usado para assinar tokens.                        | Gerado no 1º boot via `crypto.randomBytes(64)`. |
 | `data/users.json`      | Usuários do sistema (com `passwordHash` em bcrypt).                     | Vazio até o setup inicial.     |
-| `data/status.json`     | Estado dos arquivos por OS (status, pagamento, tokens públicos).        | Auto-criado.                   |
+| `data/seven.db`        | **Banco SQLite** — status, pagamentos, tokens públicos. Fonte de verdade desde a Sprint 3A. | Auto-criado no 1º boot. |
+| `data/status.json`     | Legacy — formato antigo de persistência.                                | Importado e preservado (não apagado). |
+| `data/backups/`        | Backups do `status.json` antes da migração para SQLite.                 | Auto-criado no 1º boot com `status.json` presente. |
 
 > ⚠️ `data/secrets.json` deve ficar fora do versionamento. O `.gitignore` da raiz já cobre.
 

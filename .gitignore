@@ -7,6 +7,14 @@ config.json
 data/status.json
 data/users.json
 data/secrets.json
+data/seven.db
+data/*.db
+data/*.db-journal
+data/*.db-shm
+data/*.db-wal
+data/*.sqlite
+data/*.sqlite3
+data/backups/
 impressao/
 impressao-teste/
 .claude/

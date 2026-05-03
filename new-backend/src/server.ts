@@ -8,6 +8,12 @@ import { ensureDefaultUser } from './services/auth.service';
 import { startWatcher } from './services/watcher.service';
 import { broadcast } from './services/sse.service';
 import { PORT, IMPRESSAO_DIR, ROOT } from './config';
+import { getDb } from './database/database';
+import { migrateStatusJsonIfNeeded } from './database/migrateStatusJson';
+
+// Inicializa banco e aplica schema antes de qualquer rota.
+getDb();
+migrateStatusJsonIfNeeded();
 
 const app = express();
 
